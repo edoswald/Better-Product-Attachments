@@ -2,14 +2,14 @@
 /**
  * Plugin Name: Cirrusly Better Product Attachments
  * Description: Professional product attachments with visibility, role restriction, expiry, and flexible positioning. Matches top competitor functionality.
- * Version: 3.0
+ * Version: 0.2
  * Author: Cirrusly
  * Text Domain: cirrusly-attachments
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'CIRRUSLY_VERSION', '3.0.0' );
+define( 'CIRRUSLY_VERSION', '.2' );
 define( 'CIRRUSLY_PATH', plugin_dir_path( __FILE__ ) );
 define( 'CIRRUSLY_URL', plugin_dir_url( __FILE__ ) );
 
