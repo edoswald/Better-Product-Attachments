@@ -15,7 +15,6 @@ class Cirrusly_Admin {
             wp_enqueue_media();
             wp_enqueue_script( 'cirrusly-admin-js', CIRRUSLY_URL . 'assets/js/admin.js', array( 'jquery', 'jquery-ui-sortable', 'jquery-ui-datepicker' ), CIRRUSLY_VERSION, true );
             wp_enqueue_style( 'cirrusly-admin-css', CIRRUSLY_URL . 'assets/css/admin.css', array(), CIRRUSLY_VERSION );
-            // WP default datepicker style
             wp_enqueue_style( 'jquery-ui-css', 'https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css' );
         }
     }
@@ -27,15 +26,14 @@ class Cirrusly_Admin {
     public function render_meta_box( $post ) {
         wp_nonce_field( 'cw_save_files_data', 'cw_files_nonce' );
 
-        // Fetch Data
         $names   = get_post_meta( $post->ID, 'wcpoa_attachment_name', true ) ?: [];
         $urls    = get_post_meta( $post->ID, 'wcpoa_attachment_url', true ) ?: [];
         $vis     = get_post_meta( $post->ID, 'cw_file_visibility', true ) ?: [];
         $status  = get_post_meta( $post->ID, 'cw_file_unlock_status', true ) ?: [];
         $roles   = get_post_meta( $post->ID, 'cw_file_role_restrict', true ) ?: [];
         $expiry  = get_post_meta( $post->ID, 'cw_file_expiry', true ) ?: [];
+        $downloads = get_post_meta( $post->ID, 'cw_file_downloads', true ) ?: []; // New Field
         
-        // Global Placement Setting for this product
         $placement = get_post_meta( $post->ID, 'cw_attachments_placement', true ) ?: 'description';
         $tab_title = get_post_meta( $post->ID, 'cw_attachments_tab_title', true ) ?: 'Downloads';
 
@@ -51,9 +49,10 @@ class Cirrusly_Admin {
             <label style="margin-left: 15px;"><strong>Tab Title:</strong>
                 <input type="text" name="cw_attachments_tab_title" value="<?php echo esc_attr($tab_title); ?>" placeholder="Downloads">
             </label>
+            <p class="description" style="display:inline-block; margin-left:15px;">Shortcode: <code>[cirrusly_attachments]</code></p>
         </div>
 
-        <table id="cw-files-table">
+        <table id="cw-files-table" class="widefat">
             <thead>
                 <tr>
                     <th style="width:20px;"></th>
@@ -63,6 +62,7 @@ class Cirrusly_Admin {
                     <th>Permissions</th>
                     <th>Order Status</th>
                     <th>Expiry</th>
+                    <th style="width:60px;">Dl's</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -72,6 +72,7 @@ class Cirrusly_Admin {
                     $s = $status[$i] ?? 'any';
                     $r = $roles[$i] ?? 'all';
                     $e = $expiry[$i] ?? '';
+                    $d = $downloads[$i] ?? 0;
                 ?>
                 <tr class="cw-file-row">
                     <td><span class="dashicons dashicons-menu cw-row-handle"></span></td>
@@ -81,7 +82,7 @@ class Cirrusly_Admin {
                     <td>
                         <select name="cw_file_vis[]">
                             <option value="visible" <?php selected($v, 'visible'); ?>>Visible</option>
-                            <option value="hidden" <?php selected($v, 'hidden'); ?>>Hidden (Order Only)</option>
+                            <option value="hidden" <?php selected($v, 'hidden'); ?>>Hidden</option>
                         </select>
                     </td>
 
@@ -107,15 +108,20 @@ class Cirrusly_Admin {
                         <input type="text" name="cw_file_expiry[]" value="<?php echo esc_attr($e); ?>" class="cw-datepicker cw-file-input" placeholder="YYYY-MM-DD" style="width: 90px;" />
                     </td>
 
+                    <td style="text-align:center; vertical-align:middle;">
+                        <span class="cw-count-display"><?php echo intval($d); ?></span>
+                        <input type="hidden" name="cw_file_downloads[]" value="<?php echo intval($d); ?>" />
+                    </td>
+
                     <td>
-                        <button type="button" class="button cw-upload-btn" title="Upload"><span class="dashicons dashicons-upload"></span></button>
-                        <button type="button" class="button cw-remove-row" title="Delete"><span class="dashicons dashicons-trash"></span></button>
+                        <button type="button" class="button cw-upload-btn"><span class="dashicons dashicons-upload"></span></button>
+                        <button type="button" class="button cw-remove-row"><span class="dashicons dashicons-trash"></span></button>
                     </td>
                 </tr>
                 <?php endforeach; endif; ?>
             </tbody>
         </table>
-        <button type="button" class="button button-primary" id="cw-add-row">Add Resource</button>
+        <button type="button" class="button button-primary" id="cw-add-row" style="margin-top:10px;">Add Resource</button>
         <?php
     }
 
@@ -124,7 +130,6 @@ class Cirrusly_Admin {
         if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) return;
         if ( ! current_user_can( 'edit_post', $post_id ) ) return;
 
-        // Save Global Settings
         if(isset($_POST['cw_attachments_placement'])) update_post_meta($post_id, 'cw_attachments_placement', sanitize_text_field($_POST['cw_attachments_placement']));
         if(isset($_POST['cw_attachments_tab_title'])) update_post_meta($post_id, 'cw_attachments_tab_title', sanitize_text_field($_POST['cw_attachments_tab_title']));
 
@@ -134,8 +139,9 @@ class Cirrusly_Admin {
         $status= $_POST['cw_file_status'] ?? [];
         $roles = $_POST['cw_file_role_restrict'] ?? [];
         $expiry= $_POST['cw_file_expiry'] ?? [];
+        $dloads= $_POST['cw_file_downloads'] ?? [];
 
-        $clean_names = []; $clean_urls = []; $clean_vis = []; $clean_status = []; $clean_roles = []; $clean_expiry = [];
+        $clean_names = []; $clean_urls = []; $clean_vis = []; $clean_status = []; $clean_roles = []; $clean_expiry = []; $clean_dloads = [];
 
         for ( $i = 0; $i < count( $names ); $i++ ) {
             if ( ! empty( $names[$i] ) && ! empty( $urls[$i] ) ) {
@@ -145,6 +151,7 @@ class Cirrusly_Admin {
                 $clean_status[] = sanitize_text_field( $status[$i] ?? 'any' );
                 $clean_roles[]  = sanitize_text_field( $roles[$i] ?? 'all' );
                 $clean_expiry[] = sanitize_text_field( $expiry[$i] ?? '' );
+                $clean_dloads[] = sanitize_text_field( $dloads[$i] ?? 0 );
             }
         }
 
@@ -154,5 +161,6 @@ class Cirrusly_Admin {
         update_post_meta( $post_id, 'cw_file_unlock_status', $clean_status );
         update_post_meta( $post_id, 'cw_file_role_restrict', $clean_roles );
         update_post_meta( $post_id, 'cw_file_expiry', $clean_expiry );
+        update_post_meta( $post_id, 'cw_file_downloads', $clean_dloads );
     }
 }

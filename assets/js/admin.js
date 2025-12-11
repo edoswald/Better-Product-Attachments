@@ -13,8 +13,8 @@ jQuery(document).ready(function($) {
         var row = `
         <tr class="cw-file-row">
             <td><span class="dashicons dashicons-menu cw-row-handle"></span></td>
-            <td><input type="text" name="cw_custom_name[]" class="cw-file-input" /></td>
-            <td><input type="text" name="cw_custom_url[]" class="cw-file-url cw-file-input" /></td>
+            <td><input type="text" name="cw_custom_name[]" class="cw-file-input" placeholder="File Name" /></td>
+            <td><input type="text" name="cw_custom_url[]" class="cw-file-url cw-file-input" placeholder="http://..." /></td>
             <td>
                 <select name="cw_file_vis[]">
                     <option value="visible">Visible</option>
@@ -39,6 +39,10 @@ jQuery(document).ready(function($) {
             </td>
             <td>
                 <input type="text" name="cw_file_expiry[]" class="cw-datepicker cw-file-input" placeholder="YYYY-MM-DD" style="width: 90px;" />
+            </td>
+            <td style="text-align:center; vertical-align:middle;">
+                <span class="cw-count-display">0</span>
+                <input type="hidden" name="cw_file_downloads[]" value="0" />
             </td>
             <td>
                 <button type="button" class="button cw-upload-btn"><span class="dashicons dashicons-upload"></span></button>
