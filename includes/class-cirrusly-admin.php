@@ -7,6 +7,9 @@ class Cirrusly_Admin {
         add_action( 'add_meta_boxes', array( $this, 'register_meta_box' ) );
         add_action( 'save_post', array( $this, 'save_data' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+        
+        // Register the new menu item
+        add_action( 'admin_menu', array( $this, 'register_admin_menu' ), 99 );
     }
 
     public function enqueue_assets( $hook ) {
@@ -18,6 +21,133 @@ class Cirrusly_Admin {
             wp_enqueue_style( 'jquery-ui-css', 'https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css' );
         }
     }
+
+    // --- New Menu Logic ---
+    public function register_admin_menu() {
+        add_submenu_page(
+            'woocommerce',
+            'Product Attachments',
+            'Product Attachments',
+            'manage_woocommerce',
+            'cirrusly-attachments',
+            array( $this, 'render_dashboard' )
+        );
+    }
+
+    public function render_dashboard() {
+        // Fetch all products with attachments
+        $args = array(
+            'post_type'      => 'product',
+            'posts_per_page' => -1,
+            'meta_key'       => 'wcpoa_attachment_name', // Only get products with this key
+        );
+        $products = get_posts( $args );
+
+        $total_files = 0;
+        $total_downloads = 0;
+        $rows = [];
+
+        foreach ( $products as $prod ) {
+            $pid = $prod->ID;
+            $names   = get_post_meta( $pid, 'wcpoa_attachment_name', true ) ?: [];
+            $urls    = get_post_meta( $pid, 'wcpoa_attachment_url', true ) ?: [];
+            $vis     = get_post_meta( $pid, 'cw_file_visibility', true ) ?: [];
+            $roles   = get_post_meta( $pid, 'cw_file_role_restrict', true ) ?: [];
+            $expiry  = get_post_meta( $pid, 'cw_file_expiry', true ) ?: [];
+            $downloads = get_post_meta( $pid, 'cw_file_downloads', true ) ?: [];
+
+            if ( ! empty( $names ) && is_array( $names ) ) {
+                foreach ( $names as $i => $name ) {
+                    if ( empty( $name ) ) continue;
+                    
+                    $d_count = isset($downloads[$i]) ? intval($downloads[$i]) : 0;
+                    $total_files++;
+                    $total_downloads += $d_count;
+
+                    $file_url = is_numeric( $urls[$i] ) ? wp_get_attachment_url( $urls[$i] ) : $urls[$i];
+
+                    $rows[] = array(
+                        'product_id'   => $pid,
+                        'product_name' => $prod->post_title,
+                        'file_name'    => $name,
+                        'file_url'     => $file_url,
+                        'visibility'   => $vis[$i] ?? 'visible',
+                        'role'         => $roles[$i] ?? 'all',
+                        'expiry'       => $expiry[$i] ?? '-',
+                        'downloads'    => $d_count
+                    );
+                }
+            }
+        }
+        ?>
+        <div class="wrap">
+            <h1>Product Attachments Dashboard</h1>
+            <p>Manage and audit all your downloadable resources from one location.</p>
+            
+            <div style="background:#fff; border:1px solid #ccd0d4; border-left:4px solid #007cba; padding:15px; margin:20px 0; display:flex; gap:30px; box-shadow:0 1px 1px rgba(0,0,0,0.04);">
+                <div>
+                    <strong style="display:block; font-size:12px; color:#50575e; text-transform:uppercase;">Total Active Files</strong>
+                    <span style="font-size:24px; font-weight:bold; color:#1d2327;"><?php echo $total_files; ?></span>
+                </div>
+                <div>
+                    <strong style="display:block; font-size:12px; color:#50575e; text-transform:uppercase;">Total Downloads</strong>
+                    <span style="font-size:24px; font-weight:bold; color:#1d2327;"><?php echo $total_downloads; ?></span>
+                </div>
+            </div>
+
+            <table class="widefat striped">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>File Name</th>
+                        <th>Visibility</th>
+                        <th>Restrictions</th>
+                        <th>Expiry</th>
+                        <th>Downloads</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if ( empty( $rows ) ) : ?>
+                        <tr><td colspan="7">No attachments found. Go edit a product to add some!</td></tr>
+                    <?php else : foreach ( $rows as $row ) : ?>
+                        <tr>
+                            <td>
+                                <a href="<?php echo get_edit_post_link( $row['product_id'] ); ?>"><strong><?php echo esc_html( $row['product_name'] ); ?></strong></a>
+                            </td>
+                            <td>
+                                <a href="<?php echo esc_url( $row['file_url'] ); ?>" target="_blank" title="View File">
+                                    <span class="dashicons dashicons-media-default" style="font-size:16px; width:16px; height:16px; vertical-align:middle; margin-right:5px;"></span>
+                                    <?php echo esc_html( $row['file_name'] ); ?>
+                                </a>
+                            </td>
+                            <td>
+                                <?php if($row['visibility'] === 'hidden'): ?>
+                                    <span class="badge" style="background:#f0f0f1; color:#50575e; padding:2px 6px; border-radius:3px; font-size:11px;">Hidden</span>
+                                <?php else: ?>
+                                    <span style="color:#00a32a;">Visible</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php 
+                                    if($row['role'] !== 'all') echo '<span class="dashicons dashicons-lock" style="font-size:14px; vertical-align:text-bottom;"></span> ' . ucfirst($row['role']);
+                                    else echo 'Everyone';
+                                ?>
+                            </td>
+                            <td><?php echo $row['expiry'] ? esc_html($row['expiry']) : '-'; ?></td>
+                            <td><strong><?php echo $row['downloads']; ?></strong></td>
+                            <td>
+                                <a href="<?php echo get_edit_post_link( $row['product_id'] ); ?>" class="button button-small">Edit Product</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; endif; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php
+    }
+
+    // --- Meta Box Logic (Same as before) ---
 
     public function register_meta_box() {
         add_meta_box( 'cw_product_files_box', 'Product Downloads & Attachments', array( $this, 'render_meta_box' ), 'product', 'normal', 'high' );
@@ -32,7 +162,7 @@ class Cirrusly_Admin {
         $status  = get_post_meta( $post->ID, 'cw_file_unlock_status', true ) ?: [];
         $roles   = get_post_meta( $post->ID, 'cw_file_role_restrict', true ) ?: [];
         $expiry  = get_post_meta( $post->ID, 'cw_file_expiry', true ) ?: [];
-        $downloads = get_post_meta( $post->ID, 'cw_file_downloads', true ) ?: []; // New Field
+        $downloads = get_post_meta( $post->ID, 'cw_file_downloads', true ) ?: [];
         
         $placement = get_post_meta( $post->ID, 'cw_attachments_placement', true ) ?: 'description';
         $tab_title = get_post_meta( $post->ID, 'cw_attachments_tab_title', true ) ?: 'Downloads';
